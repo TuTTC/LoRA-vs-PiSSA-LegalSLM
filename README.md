@@ -1,165 +1,80 @@
-<!-- Banner -->
-<p align='center'>
-  <a href="https://www.uit.edu.vn/" title="Trường Đại học Công nghệ Thông tin" style="border: none;">
-     <img src="https://i.imgur.com/WmMnSRt.png" alt="Trường Đại học Công nghệ Thông tin | University of Information Technology">
-  </a>
-</p>
+# Parameter-Efficient Fine-Tuning for Vietnamese Legal Reasoning: LoRA, LoRA+, DoRA and PiSSA on Qwen3-4B
 
-<h1 align="center"><b>CÁC KỸ THUẬT HỌC SÂU VÀ ỨNG DỤNG - CS431</b></h1>
+Course project for **CS431 (Deep Learning Techniques and Applications)**, University of Information Technology, VNU-HCM. We compare parameter-efficient fine-tuning (PEFT) methods on a Vietnamese legal small language model and evaluate legal reasoning with an LLM-as-a-judge protocol. A Vietnamese version of the original course README is in [`docs/README_vi.md`](docs/README_vi.md).
 
-<h3 align="center">
-  So sánh hiệu năng DoRA, PiSSA và LoRA trên LLM<br>
-  cho Tiếng Việt chuyên ngành Pháp luật
-</h3>
+**Team:** Tran Thi Cam Tu (team lead: planned the experiments and ran training and evaluation), Le Ngoc Phuong Thao, Dinh Hoang Phuc.
 
----
+## Setup
 
-## 📋 Giới thiệu môn học
+| Item | Value |
+|---|---|
+| Base model | `VLSP2025-LegalSML/qwen3-4b-legal-pretrain` (Qwen3-4B), 4-bit quantization, Unsloth |
+| Training data | `QuangTran276/new_reasoning` (Hugging Face) |
+| Test data | `VLSP2025-LegalSML/Public-Test`; results below are on the 144 samples of Task 3 |
+| PEFT | rank 32, alpha 64, all linear layers; LoRA, LoRA+ (LR ratio 16), DoRA, PiSSA (SVD init) |
+| Optimizer | AdamW 8-bit, 1 epoch, effective batch 128, seed 3407 |
+| Learning rate | 2e-5 for LoRA/DoRA; **1e-5 for PiSSA** (see limitations) |
 
-| Thông tin       | Chi tiết                         |
-| --------------- | -------------------------------- |
-| **Tên môn học** | Các kỹ thuật Học Sâu và Ứng dụng |
-| **Mã môn học**  | CS431                            |
-| **Mã lớp**      | CS431.Q22                        |
-| **Giảng viên**  | TS. Nguyễn Vinh Tiệp             |
+## Results
 
-## 👥 Thành viên nhóm
+All numbers are means over 144 generated answers, scored from 1 to 5 by an LLM judge. They come from the files in [`evaluation/results/`](evaluation/results/).
 
-| STT |   MSSV   | Họ và Tên           |   Chức vụ   | GitHub                                                     | Email                  |
-| :-: | :------: | ------------------- | :---------: | ---------------------------------------------------------- | ---------------------- |
-|  1  | 23521704 | Trần Thị Cẩm Tú     | Nhóm trưởng | [@TuTTC](https://github.com/TuTTC)                         | 23521704@gm.uit.edu.vn |
-|  2  | 23521467 | Lê Ngọc Phương Thảo | Thành viên  | [@lngphgthao](https://github.com/lngphgthao)               | 23521467@gm.uit.edu.vn |
-|  3  | 23521193 | Đinh Hoàng Phúc     | Thành viên  | [@DinhHoangPhuc3010](https://github.com/DinhHoangPhuc3010) | 23521193@gm.uit.edu.vn |
+**Judge A: Llama-3.3-70B, Bloom's-taxonomy rubric**
 
----
+| Method | Recognition | Understanding | Reasoning | Interpretation | Ethics/Bias | **Average** |
+|---|---|---|---|---|---|---|
+| LoRA | 2.66 | 3.27 | 2.79 | 1.90 | 4.69 | **3.06** |
+| LoRA+ | 2.56 | 3.16 | 2.70 | 1.77 | 4.69 | **2.98** |
+| PiSSA | 2.66 | 3.27 | 2.78 | 1.85 | 4.67 | **3.05** |
 
-## 🔬 Tổng quan đề tài
+<!-- TODO: confirm which output file each judge file scored (the LoRA+ judge file lists `lora_task3_detailed_responses.json` as its input). -->
 
-Nghiên cứu so sánh ba phương pháp tinh chỉnh tham số hiệu quả (PEFT) trên mô hình ngôn ngữ lớn cho tiếng Việt chuyên ngành Pháp luật:
+**Judge B: Qwen3-32B, legal-answer rubric (PiSSA only)**
 
-| Phương pháp | Cơ chế                          | Đặc điểm                     |
-| :---------: | ------------------------------- | ---------------------------- |
-|  **LoRA**   | ΔW = BA (Low-Rank Adaptation)   | Baseline, giảm tài nguyên    |
-|  **DoRA**   | Phân tách Direction & Magnitude | ICML 2024, học ổn định hướng |
-|  **PiSSA**  | Khởi tạo SVD-based              | Tăng tốc hội tụ đầu training |
+| Legal accuracy | Logical structure | Completeness | Relevance | Overall quality | **Average** |
+|---|---|---|---|---|---|
+| 2.61 | 3.53 | 2.12 | 3.53 | 2.63 | **2.88** |
 
-**Công cụ chính:** [Unsloth](https://github.com/unslothai/unsloth) + HuggingFace + TRL + Quantization 4-bit
+### What the results say
 
-## 📁 Cấu trúc dự án
+- The three methods are **statistically indistinguishable** here: average scores differ by at most 0.08 on a 5-point scale, while per-sample standard deviations are 0.6 to 0.9. We do not claim that one method is better.
+- All methods are strong on ethics/bias (about 4.7) and weak on legal **interpretation** (about 1.8), so the bottleneck is the model and data, not the PEFT method.
+- With Judge B, the PiSSA model is relatively good at logical structure and relevance (3.53) but weak at completeness (2.12) and legal accuracy (2.61).
+
+### Limitations
+
+- **Single run per method** (one seed) and one test split of 144 samples. No confidence intervals.
+- **Different learning rates:** PiSSA used 1e-5 while LoRA used 2e-5, so the comparison is not perfectly controlled.
+- **LLM judges** can be biased and the two judges use different rubrics, so Tables A and B are not comparable with each other.
+- **DoRA:** a configuration is provided (`configs/dora_config.yaml`), but this repository does not contain DoRA evaluation results.
+<!-- TODO: add DoRA results if the runs exist, or keep this note. -->
+
+## Repository layout
 
 ```
-CS431-DoRA-vs-PiSSA-LegalSLM/
-│
-├── configs/                     # Cấu hình thí nghiệm
-│   ├── base_config.yaml         # Tham số chung
-│   ├── lora_config.yaml         # LoRA (Baseline)
-│   ├── dora_config.yaml         # DoRA
-│   └── pissa_config.yaml        # PiSSA
-│
-├── data/                        # Dữ liệu
-│   ├── raw/                     # Dữ liệu gốc
-│   ├── processed/               # Dữ liệu đã xử lý
-│   └── prepare_data.py          # Script tiền xử lý
-│
-├── training/                    # Huấn luyện
-│   ├── train.py                 # Script chính
-│   └── trainer_utils.py         # Load model, PEFT routing
-│
-├── evaluation/                  # Đánh giá
-│   ├── evaluate.py              # Script đánh giá
-│   └── metrics.py               # PPL, ROUGE, BLEU
-│
-├── utils/                       # Tiện ích
-│   ├── logger.py                # Logging + WandB
-│   └── helpers.py               # Seed, VRAM, config
-│
-├── notebooks/                   # Jupyter notebooks
-├── outputs/                     # Kết quả (gitignored)
-│   ├── checkpoints/             # Model checkpoints
-│   ├── logs/                    # Training logs
-│   └── results/                 # Evaluation results
-│
-├── docs/                        # Tài liệu
-│   └── research_proposal.md     # Đề cương nghiên cứu
-│
-├── .gitignore
-├── requirements.txt
-├── setup.py
-└── README.md
+configs/      one YAML per method (lora, loraplus, dora, pissa, qlora, ...) plus shared base config
+data/         data preparation script
+training/     training entry point and PEFT loading utilities
+evaluation/   generation, metrics, LLM-judge scripts and result files
+rag/          retrieval-augmented variant (knowledge base, chunker, pipeline)
+demo/         demo app
+docs/         research proposal, experiment plan, Vietnamese README
 ```
 
-## 🚀 Hướng dẫn cài đặt
+`docs/vlegal_experiments.md` is a **planned** experiment design with placeholder numbers, not results.
 
-### 1. Clone repository
+## Reproduce
 
 ```bash
-git clone https://github.com/TuTTC/CS431-DoRA-vs-PiSSA-LegalSLM.git
-cd CS431-DoRA-vs-PiSSA-LegalSLM
-```
-
-### 2. Cài đặt dependencies
-
-```bash
-pip install -r requirements.txt
-```
-
-> **Lưu ý:** Unsloth cần được cài đặt theo hướng dẫn chính thức tại [unsloth.ai](https://docs.unsloth.ai/get-started/installation) tùy theo phiên bản CUDA/PyTorch.
-
-### 3. Chuẩn bị dữ liệu
-
-Đặt dữ liệu gốc (`.json` / `.jsonl`) vào `data/raw/`, sau đó chạy:
-
-```bash
+pip install -r requirements.txt   # install Unsloth following its official guide for your CUDA/PyTorch
 python data/prepare_data.py --input_dir data/raw --output_dir data/processed
+python training/train.py --peft_config configs/pissa_config.yaml    # or lora_config.yaml, dora_config.yaml, ...
 ```
 
-## 🏋️ Huấn luyện
+<!-- TODO: add the exact generation and judge commands (see evaluation/run_eval.py and evaluation/llm_judge_task3.py). -->
 
-Chạy từng nhánh thí nghiệm:
+The judge scripts need API keys (for example a Groq key). Put them in a local `.env` file, which is git-ignored.
 
-```bash
-# LoRA (Baseline)
-python training/train.py --peft_config configs/lora_config.yaml
+## Acknowledgements
 
-# DoRA
-python training/train.py --peft_config configs/dora_config.yaml
-
-# PiSSA
-python training/train.py --peft_config configs/pissa_config.yaml
-```
-
-## 📊 Đánh giá
-
-```bash
-# Đánh giá LoRA
-python evaluation/evaluate.py --peft_config configs/lora_config.yaml
-
-# Đánh giá DoRA
-python evaluation/evaluate.py --peft_config configs/dora_config.yaml
-
-# Đánh giá PiSSA
-python evaluation/evaluate.py --peft_config configs/pissa_config.yaml
-```
-
-**Metrics đánh giá:**
-
-- **Perplexity (PPL):** Đánh giá chất lượng ngôn ngữ
-- **ROUGE-1/2/L:** Đánh giá độ trùng khớp n-gram
-- **BLEU:** Đánh giá chất lượng văn bản sinh ra
-
-## 📅 Timeline (8 tuần)
-
-| Tuần | Nội dung                                                |
-| :--: | ------------------------------------------------------- |
-| 1–2  | Thu thập dữ liệu + Setup môi trường + Literature Review |
-| 3–4  | Chạy LoRA baseline + Hyperparameter tuning              |
-| 5–6  | Chạy DoRA & PiSSA + WandB logging                       |
-|  7   | Evaluation + Metrics + Biểu đồ so sánh                  |
-|  8   | Báo cáo + Ablation Study                                |
-
----
-
-<p align="center">
-  <b>CS431 - Các kỹ thuật Học Sâu và Ứng dụng</b><br>
-  Trường Đại học Công nghệ Thông tin - ĐHQG TP.HCM
-</p>
+Training hyper-parameters follow the Bosch@AI_Team paper noted in `configs/base_config.yaml`; the base model and datasets come from the VLSP 2025 LegalSML organizers. Libraries: Unsloth, Hugging Face Transformers, PEFT, TRL.

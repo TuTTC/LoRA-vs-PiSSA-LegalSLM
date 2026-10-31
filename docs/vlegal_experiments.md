@@ -1,3 +1,5 @@
+> **PLANNED EXPERIMENT DESIGN, NOT RESULTS.** Every number in the tables below (including `0.xx`, deltas and expected VRAM/time) is a placeholder or a hypothesis written before running the experiments. For measured results see the root README.
+
 # Thiết kế Hệ thống Thực nghiệm Hội nghị MAPR (Đánh giá BSLoRA vs FFT)
 
 Tài liệu này định nghĩa 4 bảng thực nghiệm (Experiment Scenarios) chi tiết được thiết kế theo tiêu chuẩn của các hội nghị khoa học quốc tế (như MAPR), nhằm chứng minh tính ưu việt của phương pháp đề xuất **BSLoRA** so với các baseline SOTA (DoRA, PiSSA) và Upper Bound (Full Fine-Tuning).

@@ -81,3 +81,5 @@ unsloth/
 # Gradio
 # =============================================================================
 .gradio/
+# Local virtual environments
+venv_*/
